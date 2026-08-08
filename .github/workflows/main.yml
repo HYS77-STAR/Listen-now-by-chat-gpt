@@ -26,32 +26,58 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Setup & Build Android APK
+      - name: Setup Gradle Environment
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Inspect & Build Project
         run: |
-          # 1. إذا كان المشروع يحتوي على package.json يتم تثبيت المكتبات وتجهيز Capacitor
-          if [ -f "package.json" ]; then
-            echo "Installing Node dependencies..."
+          echo "=== 1. Inspecting Repository Files ==="
+          ls -la
+
+          # البحث عن ملفات الإعداد الأساسية
+          PACKAGE_JSON=$(find . -name "package.json" -not -path "*/node_modules/*" | head -n 1)
+          BUILD_GRADLE=$(find . -name "build.gradle*" -not -path "*/node_modules/*" | head -n 1)
+
+          # 2. معالجة مشاريع Capacitor / Web
+          if [ -n "$PACKAGE_JSON" ]; then
+            PROJECT_DIR=$(dirname "$PACKAGE_JSON")
+            echo "Found package.json at: $PROJECT_DIR"
+            cd "$PROJECT_DIR"
+            
             npm install --legacy-peer-deps || npm install
             
             if grep -q '"build":' package.json; then
               npm run build || true
             fi
 
-            echo "Syncing Capacitor Android project..."
+            if [ ! -d "android" ]; then
+              echo "Android platform folder not found. Adding Capacitor Android platform..."
+              npm install @capacitor/android @capacitor/cli
+              npx cap add android || true
+            fi
+            
             npx cap sync android || true
+            cd "$GITHUB_WORKSPACE"
           fi
 
-          # 2. البحث عن ملف gradlew في أي مكان داخل المشروع وتشغيله
-          GRADLEW_PATH=$(find . -name "gradlew" | head -n 1)
+          # 3. البحث عن gradlew أو توليده
+          GRADLEW_PATH=$(find . -name "gradlew" -not -path "*/node_modules/*" | head -n 1)
 
           if [ -n "$GRADLEW_PATH" ]; then
-            echo "Found gradlew at: $GRADLEW_PATH"
+            echo "Found existing gradlew at: $GRADLEW_PATH"
             GRADLE_DIR=$(dirname "$GRADLEW_PATH")
             cd "$GRADLE_DIR"
             chmod +x gradlew
             ./gradlew assembleDebug
+          elif [ -n "$BUILD_GRADLE" ]; then
+            echo "gradlew not found, but build.gradle exists! Generating wrapper on the fly..."
+            GRADLE_DIR=$(dirname "$BUILD_GRADLE")
+            cd "$GRADLE_DIR"
+            gradle wrapper
+            chmod +x gradlew
+            ./gradlew assembleDebug
           else
-            echo "Error: Could not find 'gradlew' file in the repository."
+            echo "Error: No build.gradle or package.json found in the repository!"
             exit 1
           fi
 
