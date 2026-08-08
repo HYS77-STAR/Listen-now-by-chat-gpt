@@ -21,20 +21,37 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
 
-      - name: Build Debug APK
+      - name: Setup & Build Android APK
         run: |
-          if [ -f "./gradlew" ]; then
-            chmod +x gradlew
-            ./gradlew assembleDebug
-          elif [ -f "./android/gradlew" ]; then
-            cd android
+          # 1. إذا كان المشروع يحتوي على package.json يتم تثبيت المكتبات وتجهيز Capacitor
+          if [ -f "package.json" ]; then
+            echo "Installing Node dependencies..."
+            npm install --legacy-peer-deps || npm install
+            
+            if grep -q '"build":' package.json; then
+              npm run build || true
+            fi
+
+            echo "Syncing Capacitor Android project..."
+            npx cap sync android || true
+          fi
+
+          # 2. البحث عن ملف gradlew في أي مكان داخل المشروع وتشغيله
+          GRADLEW_PATH=$(find . -name "gradlew" | head -n 1)
+
+          if [ -n "$GRADLEW_PATH" ]; then
+            echo "Found gradlew at: $GRADLEW_PATH"
+            GRADLE_DIR=$(dirname "$GRADLEW_PATH")
+            cd "$GRADLE_DIR"
             chmod +x gradlew
             ./gradlew assembleDebug
           else
-            echo "Error: gradlew file not found in root or android folder!"
+            echo "Error: Could not find 'gradlew' file in the repository."
             exit 1
           fi
 
