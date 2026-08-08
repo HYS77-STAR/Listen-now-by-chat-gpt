@@ -29,55 +29,46 @@ jobs:
       - name: Setup Gradle Environment
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Inspect & Build Project
+      - name: Auto-Detect and Build APK
         run: |
-          echo "=== 1. Inspecting Repository Files ==="
+          echo "=== 1. Inspecting Repository Content ==="
           ls -la
 
-          # البحث عن ملفات الإعداد الأساسية
+          # البحث عن package.json أو build.gradle في أي مكان داخل المستودع
           PACKAGE_JSON=$(find . -name "package.json" -not -path "*/node_modules/*" | head -n 1)
           BUILD_GRADLE=$(find . -name "build.gradle*" -not -path "*/node_modules/*" | head -n 1)
 
-          # 2. معالجة مشاريع Capacitor / Web
           if [ -n "$PACKAGE_JSON" ]; then
-            PROJECT_DIR=$(dirname "$PACKAGE_JSON")
-            echo "Found package.json at: $PROJECT_DIR"
-            cd "$PROJECT_DIR"
-            
+            echo "Found existing package.json at: $PACKAGE_JSON"
+            cd $(dirname "$PACKAGE_JSON")
             npm install --legacy-peer-deps || npm install
-            
-            if grep -q '"build":' package.json; then
-              npm run build || true
-            fi
-
-            if [ ! -d "android" ]; then
-              echo "Android platform folder not found. Adding Capacitor Android platform..."
-              npm install @capacitor/android @capacitor/cli
-              npx cap add android || true
-            fi
-            
+            if grep -q '"build":' package.json; then npm run build || true; fi
+            if [ ! -d "android" ]; then npx cap add android || true; fi
             npx cap sync android || true
             cd "$GITHUB_WORKSPACE"
+          elif [ -d "www" ] && [ -z "$BUILD_GRADLE" ]; then
+            echo "Found 'www' directory without build manifest. Creating dynamic Capacitor project..."
+            
+            # إنشاء بيئة Capacitor وتغليف مجلد www تلقائياً
+            npm init -y
+            npm install @capacitor/core @capacitor/cli @capacitor/android
+            
+            npx cap init "Listen Now" "com.hus.listennow" --web-dir www
+            npx cap add android
+            npx cap sync android
           fi
 
-          # 3. البحث عن gradlew أو توليده
+          # البحث عن gradlew المنشأ وتجميع الـ APK
           GRADLEW_PATH=$(find . -name "gradlew" -not -path "*/node_modules/*" | head -n 1)
 
           if [ -n "$GRADLEW_PATH" ]; then
-            echo "Found existing gradlew at: $GRADLEW_PATH"
+            echo "Found gradlew at: $GRADLEW_PATH. Starting build..."
             GRADLE_DIR=$(dirname "$GRADLEW_PATH")
             cd "$GRADLE_DIR"
             chmod +x gradlew
             ./gradlew assembleDebug
-          elif [ -n "$BUILD_GRADLE" ]; then
-            echo "gradlew not found, but build.gradle exists! Generating wrapper on the fly..."
-            GRADLE_DIR=$(dirname "$BUILD_GRADLE")
-            cd "$GRADLE_DIR"
-            gradle wrapper
-            chmod +x gradlew
-            ./gradlew assembleDebug
           else
-            echo "Error: No build.gradle or package.json found in the repository!"
+            echo "Error: Failed to locate or generate Android project."
             exit 1
           fi
 
