@@ -27,20 +27,30 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
 
+    - name: Accept Android SDK Licenses
+      run: |
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+
+    - name: Prepare Web Directory
+      run: |
+        mkdir -p www
+        if [ -f "index.html" ]; then
+          cp index.html www/
+        fi
+
     - name: Initialize Capacitor & Build Android Project
       run: |
-        echo "Initializing Capacitor Environment..."
         npm init -y
         npm install @capacitor/core @capacitor/cli @capacitor/android
         npx cap init "Listen Now" "com.listen.now" --web-dir "www"
-        npx cap add android
+        npx cap add android || true
         npx cap sync android
 
     - name: Build Debug APK
       run: |
         cd android
         chmod +x gradlew
-        ./gradlew assembleDebug
+        ./gradlew assembleDebug --no-daemon
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
