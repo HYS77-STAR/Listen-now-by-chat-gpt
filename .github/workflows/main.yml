@@ -54,17 +54,8 @@ jobs:
             npm init -y
             npm install @capacitor/core@latest @capacitor/cli@latest @capacitor/android@latest
             
-            # إنشاء ملف إعدادات Capacitor مكتمل ومستقر
-            cat <<EOT > capacitor.config.json
-            {
-              "appId": "com.hus.listennow",
-              "appName": "Listen Now",
-              "webDir": "www",
-              "server": {
-                "androidScheme": "https"
-              }
-            }
-            EOT
+            # إنشاء ملف التهيئة بطريقة سريعة ومضمونة بدون أخطاء أسطر
+            echo '{"appId":"com.hus.listennow","appName":"Listen Now","webDir":"www","server":{"androidScheme":"https"}}' > capacitor.config.json
 
             npx cap add android
             npx cap sync android
@@ -77,7 +68,7 @@ jobs:
           GRADLEW_PATH=$(find . -name "gradlew" -not -path "*/node_modules/*" | head -n 1)
 
           if [ -n "$GRADLEW_PATH" ]; then
-            echo "Found gradlew at: $GRADLEW_PATH. Starting build with --stacktrace..."
+            echo "Found gradlew at: $GRADLEW_PATH. Starting build..."
             GRADLE_DIR=$(dirname "$GRADLEW_PATH")
             cd "$GRADLE_DIR"
             chmod +x gradlew
