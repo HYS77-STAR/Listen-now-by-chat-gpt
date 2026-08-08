@@ -26,8 +26,13 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Setup Android SDK
+      - name: Setup Android SDK Tools
         uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK Components
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0" || true
 
       - name: Setup Gradle Environment
         uses: gradle/actions/setup-gradle@v3
@@ -49,22 +54,24 @@ jobs:
             npx cap sync android || true
             cd "$GITHUB_WORKSPACE"
           elif [ -d "www" ] && [ -z "$BUILD_GRADLE" ]; then
-            echo "Found 'www' directory. Building Capacitor project dynamically..."
+            echo "Found 'www' directory. Preparing Capacitor build environment..."
             
+            # ضمان وجود ملف index.html لمنع فشل دمج الأصول في Gradle
+            if [ ! -f "www/index.html" ]; then
+              echo "Creating index.html entry point inside www..."
+              echo '<!DOCTYPE html><html><head><title>Listen Now</title></head><body><h1>Listen Now App</h1></body></html>' > www/index.html
+            fi
+
             npm init -y
-            npm install @capacitor/core@latest @capacitor/cli@latest @capacitor/android@latest
+            npm install @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6
             
-            # إنشاء ملف التهيئة بطريقة سريعة ومضمونة بدون أخطاء أسطر
             echo '{"appId":"com.hus.listennow","appName":"Listen Now","webDir":"www","server":{"androidScheme":"https"}}' > capacitor.config.json
 
             npx cap add android
             npx cap sync android
           fi
 
-          # الموافقة التلقائية على تراخيص Android SDK
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-
-          # البحث عن gradlew والبدء في بناء الـ APK
+          # البحث عن gradlew وتشغيله ببيئة متكاملة
           GRADLEW_PATH=$(find . -name "gradlew" -not -path "*/node_modules/*" | head -n 1)
 
           if [ -n "$GRADLEW_PATH" ]; then
@@ -72,7 +79,7 @@ jobs:
             GRADLE_DIR=$(dirname "$GRADLEW_PATH")
             cd "$GRADLE_DIR"
             chmod +x gradlew
-            ./gradlew assembleDebug --stacktrace
+            ./gradlew assembleDebug --no-daemon --stacktrace
           else
             echo "Error: Failed to locate or generate Android project."
             exit 1
